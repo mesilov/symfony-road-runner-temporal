@@ -1,0 +1,13 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/Kernel.php'
+            - '../src/Workflow/'
+            - '../src/Activity/'
+            - '../src/temporal-worker.php'
+            - '../src/client.php'

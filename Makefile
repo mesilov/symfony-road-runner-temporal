@@ -1,4 +1,4 @@
-.PHONY: build up down restart logs composer-install shell status temporal-client temporal-logs
+.PHONY: build up down restart logs composer-install shell status temporal-client temporal-logs sf-console cache-clear
 
 build:
 	docker compose build
@@ -30,3 +30,9 @@ temporal-client:
 
 temporal-logs:
 	docker compose logs -f temporal-worker
+
+sf-console:
+	docker compose exec app php bin/console $(CMD)
+
+cache-clear:
+	docker compose exec app php bin/console cache:clear

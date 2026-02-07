@@ -1,10 +1,12 @@
-# PHP 8.4 + RoadRunner + Temporal
+# PHP 8.4 + Symfony 8 + RoadRunner + Temporal
 
-Демонстрационный проект: PHP 8.4 приложение на базе RoadRunner (вместо nginx/php-fpm) с оркестрацией бизнес-процессов через Temporal. Всё запускается в Docker.
+Демонстрационный проект: PHP 8.4 приложение на базе **Symfony 8** и **RoadRunner** (вместо nginx/php-fpm) с оркестрацией бизнес-процессов через Temporal. Интеграция Symfony с RoadRunner через **baldinof/roadrunner-bundle**. Всё запускается в Docker.
 
 ## Технологический стек
 
 - **PHP 8.4** — с расширениями sockets, zip, pdo_pgsql, grpc
+- **Symfony 8.0** — полноценный фреймворк (Kernel, DI Container, Router, Console)
+- **baldinof/roadrunner-bundle** — интеграция Symfony с RoadRunner (worker loop, kernel reboot)
 - **RoadRunner 2025** — высокопроизводительный Go-сервер, запускающий PHP как долгоживущий процесс
 - **Temporal** — платформа оркестрации workflow с гарантией выполнения
 - **PostgreSQL 16** — база данных (используется Temporal для хранения состояния)
@@ -15,13 +17,13 @@
 ### Обработка HTTP-запросов
 
 ```
-Клиент → RoadRunner (порт 80) → PHP worker (src/worker.php)
+Клиент → RoadRunner (порт 80) → Symfony Kernel (public/index.php)
                 ↓
         Статика из public/
         (.html, .css, .js, .ico, .txt)
 ```
 
-RoadRunner держит PHP-процессы в памяти — они не пересоздаются на каждый запрос. Worker работает в бесконечном цикле через `PSR7Worker`, принимая PSR-7 запросы и отдавая PSR-7 ответы.
+RoadRunner держит PHP-процессы в памяти — они не пересоздаются на каждый запрос. Через `baldinof/roadrunner-bundle` Runtime бандл автоматически управляет worker loop, ребутом ядра Symfony и очисткой ресурсов между запросами.
 
 ### Temporal workflow
 
@@ -42,7 +44,7 @@ Temporal worker запускается как отдельный экземпл�
 | Сервис | Образ | Порт | Назначение |
 |--------|-------|------|------------|
 | `php` | php:8.4-cli + Composer | — | Базовый образ для одноразовых команд (`composer install`) |
-| `app` | php + RoadRunner | 80 | HTTP-приложение |
+| `app` | php + RoadRunner | 80 | HTTP-приложение (Symfony + RoadRunner) |
 | `temporal-worker` | php + RoadRunner | — | Worker для Temporal workflow и activity |
 | `temporal` | temporalio/auto-setup | 7233 | Temporal Server |
 | `temporal-ui` | temporalio/ui | 8233 | Веб-интерфейс Temporal |
@@ -52,26 +54,38 @@ Temporal worker запускается как отдельный экземпл�
 
 ```
 .
+├── bin/
+│   └── console                   # Symfony Console entry point
+├── config/
+│   ├── bundles.php               # FrameworkBundle + BaldinofRoadRunnerBundle
+│   ├── packages/
+│   │   ├── framework.yaml        # Symfony Framework config
+│   │   └── baldinof_road_runner.yaml  # RoadRunner bundle config (kernel reboot)
+│   ├── routes.yaml               # Attribute routing из src/Controller/
+│   └── services.yaml             # Autowiring с исключением Temporal-классов
 ├── docker/
-│   ├── php/Dockerfile          # Базовый PHP 8.4 образ с расширениями
-│   ├── rr/Dockerfile           # PHP + RoadRunner бинарник
+│   ├── php/Dockerfile            # Базовый PHP 8.4 образ с расширениями
+│   ├── rr/Dockerfile             # PHP + RoadRunner бинарник
 │   └── postgres/
 │       ├── Dockerfile
-│       └── init.sql            # Инициализация БД
+│       └── init.sql              # Инициализация БД
 ├── public/
-│   ├── index.html              # Статические файлы (отдаются RoadRunner напрямую)
+│   ├── index.php                 # Symfony entry point (RoadRunner worker через Runtime)
+│   ├── index.html                # Статические файлы (отдаются RoadRunner напрямую)
 │   └── robots.txt
 ├── src/
-│   ├── worker.php              # HTTP worker — точка входа для RoadRunner
-│   ├── test.php                # Логика формирования ответа
-│   ├── temporal-worker.php     # Temporal worker — регистрация workflow и activity
-│   ├── client.php              # Клиент для запуска workflow
+│   ├── Kernel.php                # Symfony MicroKernel
+│   ├── Controller/
+│   │   └── HelloController.php   # HTTP-контроллер (маршрут "/")
+│   ├── temporal-worker.php       # Temporal worker — регистрация workflow и activity
+│   ├── client.php                # Клиент для запуска workflow
 │   ├── Workflow/
 │   │   └── SayHelloWorkflow.php
 │   └── Activity/
 │       └── GreetingActivity.php
-├── .rr.yaml                    # Конфиг RoadRunner для HTTP
-├── .rr-temporal.yaml           # Конфиг RoadRunner для Temporal worker
+├── .env                          # Переменные окружения (APP_ENV, APP_SECRET)
+├── .rr.yaml                      # Конфиг RoadRunner для HTTP
+├── .rr-temporal.yaml             # Конфиг RoadRunner для Temporal worker
 ├── docker-compose.yml
 ├── composer.json
 └── Makefile
@@ -94,6 +108,7 @@ make up
 
 # 5. Проверить работу HTTP-приложения
 curl http://localhost
+# Ожидаемый вывод: Hello from Symfony + RoadRunner! <timestamp>
 
 # 6. Запустить пример Temporal workflow
 make temporal-client
@@ -117,16 +132,21 @@ make temporal-client
 | `make status` | Показать статус контейнеров |
 | `make temporal-client` | Запустить пример workflow SayHello |
 | `make temporal-logs` | Показать логи Temporal worker (follow) |
+| `make sf-console CMD=...` | Запустить Symfony Console команду (например `CMD=debug:router`) |
+| `make cache-clear` | Очистить кеш Symfony |
 
 ## Как это работает
 
 ### RoadRunner HTTP worker
 
-Файл `src/worker.php` — точка входа для HTTP-обработки. RoadRunner запускает этот PHP-скрипт как долгоживущий процесс. Worker работает в бесконечном цикле:
+Файл `public/index.php` — точка входа для HTTP-обработки. Через `baldinof/roadrunner-bundle` Runtime бандл автоматически:
 
-1. Ожидает запрос от RoadRunner через `PSR7Worker::waitRequest()`
-2. Делегирует обработку в `src/test.php`
-3. Формирует PSR-7 ответ и отправляет обратно через `PSR7Worker::respond()`
+1. Создаёт Symfony Kernel
+2. Запускает worker loop (приём запросов от RoadRunner)
+3. Конвертирует PSR-7 запросы в Symfony HttpFoundation Request
+4. Передаёт запрос через Symfony Kernel (routing → controller → response)
+5. Конвертирует Symfony Response обратно в PSR-7 и отправляет RoadRunner
+6. Управляет ребутом ядра (по исключениям, по лимиту задач)
 
 Пул worker-ов настраивается в `.rr.yaml` (по умолчанию 2 воркера, максимум 64 задачи на воркер).
 
@@ -148,7 +168,8 @@ RoadRunner обслуживает статические файлы из `public
 
 ### `.rr.yaml` — HTTP worker
 
-- `server.command` — команда запуска PHP worker (`php src/worker.php`)
+- `server.command` — команда запуска Symfony (`php public/index.php`)
+- `server.env.APP_RUNTIME` — класс Runtime для интеграции с RoadRunner (`Baldinof\RoadRunnerBundle\Runtime\Runtime`)
 - `http.address` — адрес прослушивания (`0.0.0.0:80`)
 - `http.static` — настройки раздачи статики из `public/`
 - `http.pool` — размер пула воркеров и лимит задач
@@ -159,6 +180,13 @@ RoadRunner обслуживает статические файлы из `public
 - `server.command` — команда запуска Temporal worker (`php src/temporal-worker.php`)
 - `temporal.address` — адрес Temporal Server (`temporal:7233`)
 - `temporal.activities.num_workers` — количество воркеров для activity (2)
+
+### Symfony конфигурация
+
+- `config/packages/framework.yaml` — секрет приложения, роутер, логирование PHP-ошибок
+- `config/packages/baldinof_road_runner.yaml` — стратегия ребута ядра (`on_exception`, `max_jobs: 500`)
+- `config/services.yaml` — автоматический autowiring с исключением Temporal-классов
+- `.env` — переменные окружения (`APP_ENV`, `APP_DEBUG`, `APP_SECRET`)
 
 ## Важно
 

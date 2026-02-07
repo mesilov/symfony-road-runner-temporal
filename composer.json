@@ -1,11 +1,13 @@
 {
     "name": "app/roadrunner-hello",
-    "description": "Hello World with RoadRunner and PHP 8.4",
+    "description": "Symfony 8 application with RoadRunner and Temporal",
     "type": "project",
     "require": {
         "php": ">=8.4",
-        "nyholm/psr7": "^1.8",
-        "spiral/roadrunner-http": "^3.0",
+        "baldinof/roadrunner-bundle": "^3.3",
+        "symfony/dotenv": "^8.0",
+        "symfony/framework-bundle": "^8.0",
+        "symfony/runtime": "^8.0",
         "temporal/sdk": "2.16.0"
     },
     "autoload": {
@@ -14,6 +16,14 @@
         }
     },
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "symfony/runtime": true
+        }
+    },
+    "extra": {
+        "runtime": {
+            "class": "Baldinof\\RoadRunnerBundle\\Runtime\\Runtime"
+        }
     }
 }

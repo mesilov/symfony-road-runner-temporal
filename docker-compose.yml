@@ -18,6 +18,10 @@ services:
     volumes:
       - .:/app
       - ./var/logs:/app/var/logs
+    environment:
+      - APP_ENV=dev
+      - APP_DEBUG=1
+      - APP_SECRET=change-me-to-a-random-secret-string
     depends_on:
       - postgres
 
