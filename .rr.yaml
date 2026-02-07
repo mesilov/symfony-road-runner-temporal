@@ -7,7 +7,7 @@ server:
   command: "php src/worker.php"
 
 http:
-  address: "0.0.0.0:8080"
+  address: "0.0.0.0:80"
   middleware:
     - "static"
   static:

@@ -23,7 +23,7 @@ make temporal-logs      # Tail logs from temporal-worker container
 
 ## Architecture
 
-**Request flow:** Client → RoadRunner (Go binary, port 8080) → PHP worker (`src/worker.php`)
+**Request flow:** Client → RoadRunner (Go binary, port 80) → PHP worker (`src/worker.php`)
 
 - RoadRunner serves static files from `public/` directly (configured in `.rr.yaml` with static middleware)
 - All other requests are dispatched to the PHP worker process
@@ -38,7 +38,7 @@ make temporal-logs      # Tail logs from temporal-worker container
 
 **Docker services (docker-compose.yml):**
 - `php` — Base PHP 8.4 CLI image with extensions (sockets, zip, pdo_pgsql, grpc) + Composer. Used for running one-off commands like `composer install`.
-- `app` — RoadRunner image (extends php base + RoadRunner binary). The running HTTP application on port 8080.
+- `app` — RoadRunner image (extends php base + RoadRunner binary). The running HTTP application on port 80.
 - `temporal-worker` — RoadRunner image running the Temporal worker (`src/temporal-worker.php`) with `.rr-temporal.yaml` config.
 - `temporal` — Temporal server (auto-setup image) on port 7233, uses PostgreSQL as its backing store.
 - `temporal-ui` — Temporal Web UI on port 8233.
