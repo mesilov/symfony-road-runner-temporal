@@ -1,4 +1,4 @@
-.PHONY: build up down restart logs composer-install shell status
+.PHONY: build up down restart logs composer-install shell status temporal-client temporal-logs
 
 build:
 	docker compose build
@@ -24,3 +24,9 @@ shell:
 
 status:
 	docker compose ps
+
+temporal-client:
+	docker compose run --rm php php src/client.php
+
+temporal-logs:
+	docker compose logs -f temporal-worker
