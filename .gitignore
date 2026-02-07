@@ -1,0 +1,5 @@
+/vendor/
+.idea/
+.env
+docker-compose.override.yml
+var/logs/*.log

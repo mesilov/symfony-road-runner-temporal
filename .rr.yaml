@@ -1,0 +1,20 @@
+version: "3"
+
+server:
+  command: "php src/worker.php"
+
+http:
+  address: "0.0.0.0:8080"
+  middleware:
+    - "static"
+  static:
+    dir: "public"
+    allow:
+      - ".html"
+      - ".txt"
+      - ".css"
+      - ".js"
+      - ".ico"
+  pool:
+    num_workers: 2
+    max_jobs: 64
