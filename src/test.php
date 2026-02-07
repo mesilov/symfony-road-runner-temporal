@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-$message = 'Hello from RoadRunner!';
+$message = sprintf('Hello from RoadRunner! %s', time());
 
 $logDir = __DIR__ . '/../var/logs';
 $logFile = $logDir . '/app.log';
