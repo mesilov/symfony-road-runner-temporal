@@ -5,3 +5,8 @@ monolog:
             path: "php://stderr"
             level: debug
             channels: ["!event"]
+        buggregator:
+            type: socket
+            connection_string: '%env(BUGGREGATOR_HOST)%:9913'
+            formatter: monolog.formatter.json
+            level: debug

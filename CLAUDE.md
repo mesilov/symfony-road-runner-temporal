@@ -29,7 +29,7 @@ make phpstan            # Run PHPStan static analysis (level 8)
 
 ## Environments
 
-- **Dev** (`make up`): bind-mount volumes, `APP_DEBUG=1`, all ports exposed, debug logging to stderr
+- **Dev** (`make up`): bind-mount volumes, `APP_DEBUG=1`, all ports exposed, debug logging to stderr, Buggregator debug server on port 8000
 - **Prod** (`make up-prod`): no volumes, `APP_ENV=prod`, `APP_DEBUG=0`, JSON logging to stderr, resource limits, `restart: unless-stopped`
 
 Prod uses compose override: `docker-compose.yml` + `docker-compose.prod.yml`.
@@ -45,7 +45,7 @@ Environment variables are configured via `.env` / `.env.local`. See `.env.exampl
 - The bundle handles PSR-7 ↔ HttpFoundation conversion, kernel reboot strategy, and resource cleanup between requests
 - Controllers in `src/Controller/` use Symfony attribute routing
 - Symfony DI Container provides autowiring for services
-- Health check endpoint: `GET /healthz` → `{"status":"ok"}`
+- Health check endpoint: `GET /health` → `{"status":"ok"}`
 - Prometheus metrics: RoadRunner exports on port 2112
 
 **Temporal workflow:** Client (`src/client.php`) → Temporal server (port 7233) → Temporal worker (`src/temporal-worker.php`) → Workflow/Activity classes
@@ -56,11 +56,12 @@ Environment variables are configured via `.env` / `.env.local`. See `.env.exampl
 
 **Docker services (docker-compose.yml):**
 - `php` — Base PHP 8.4 CLI image with extensions (sockets, zip, pdo_pgsql, grpc) + Composer. Used for running one-off commands like `composer install`.
-- `app` — RoadRunner image (extends php base + RoadRunner binary). The running Symfony HTTP application on port 80. Has Docker HEALTHCHECK via `/healthz`.
+- `app` — RoadRunner image (extends php base + RoadRunner binary). The running Symfony HTTP application on port 80. Has Docker HEALTHCHECK via `/health`.
 - `temporal-worker` — RoadRunner image running the Temporal worker (`src/temporal-worker.php`) with `.rr-temporal.yaml` config.
 - `temporal` — Temporal server (auto-setup image) on port 7233, uses PostgreSQL as its backing store. Has Docker HEALTHCHECK.
 - `temporal-ui` — Temporal Web UI on port 8233.
 - `postgres` — PostgreSQL 16 on port 5432. Has Docker HEALTHCHECK via `pg_isready`. Credentials via env vars (defaults: `app`/`app`/`app`).
+- `buggregator` — Buggregator debug server (dev profile only). Web UI on port 8000. Receives Monolog logs (port 9913), VarDumper dumps (port 9912), SMTP (port 1025).
 
 **Key config:**
 - `.rr.yaml` — RoadRunner HTTP worker config (server command, HTTP address, static files, worker pool with supervisor, JSON logging, Prometheus metrics on 2112, RPC).
@@ -74,7 +75,7 @@ Environment variables are configured via `.env` / `.env.local`. See `.env.exampl
 
 - **PHPUnit**: `make test` — runs tests in `tests/` directory. Config in `phpunit.xml.dist`.
 - **PHPStan**: `make phpstan` — static analysis at level 8. Config in `phpstan.neon`.
-- Smoke test: `tests/Controller/HealthControllerTest.php` covers the `/healthz` endpoint.
+- Smoke test: `tests/Controller/HealthControllerTest.php` covers the `/health` endpoint.
 
 ## Key Constraint
 

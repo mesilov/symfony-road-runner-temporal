@@ -11,7 +11,7 @@ class HealthControllerTest extends WebTestCase
     public function testHealthEndpointReturnsOk(): void
     {
         $client = static::createClient();
-        $client->request('GET', '/healthz');
+        $client->request('GET', '/health');
 
         self::assertResponseIsSuccessful();
         self::assertResponseHeaderSame('content-type', 'application/json');

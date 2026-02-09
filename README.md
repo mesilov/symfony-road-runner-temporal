@@ -50,6 +50,7 @@ Temporal worker запускается как отдельный экземпл�
 | `temporal` | temporalio/auto-setup | 7233 | Temporal Server |
 | `temporal-ui` | temporalio/ui | 8233 | Веб-интерфейс Temporal |
 | `postgres` | PostgreSQL 16 | 5432 | База данных |
+| `buggregator` | buggregator/server | 8000 | Debug-сервер (только dev, profile: dev) |
 
 ## Окружения (Environments)
 
@@ -62,6 +63,7 @@ make up    # запуск dev-контура
 - Bind-mount всех файлов в контейнер
 - `APP_DEBUG=1`, подробное логирование
 - Все порты открыты наружу (PostgreSQL 5432, Temporal 7233)
+- Buggregator debug-сервер на http://localhost:8000 (логи, VarDumper, SMTP)
 
 ### Production
 
@@ -110,7 +112,7 @@ make up-prod    # запуск prod-контура
 │   ├── Kernel.php                # Symfony MicroKernel
 │   ├── Controller/
 │   │   ├── HelloController.php   # HTTP-контроллер (маршрут "/")
-│   │   └── HealthController.php  # Health check endpoint (/healthz)
+│   │   └── HealthController.php  # Health check endpoint (/health)
 │   ├── temporal-worker.php       # Temporal worker — регистрация workflow и activity
 │   ├── client.php                # Клиент для запуска workflow
 │   ├── Workflow/
@@ -156,7 +158,7 @@ curl http://localhost
 # Ожидаемый вывод: Hello from Symfony + RoadRunner! <timestamp>
 
 # 7. Проверить health endpoint
-curl http://localhost/healthz
+curl http://localhost/health
 # Ожидаемый вывод: {"status":"ok"}
 
 # 8. Запустить пример Temporal workflow
@@ -190,7 +192,7 @@ make temporal-client
 
 ## Health Check
 
-Endpoint: `GET /healthz` — возвращает `{"status":"ok"}` с HTTP 200.
+Endpoint: `GET /health` — возвращает `{"status":"ok"}` с HTTP 200.
 
 Используется Docker HEALTHCHECK для автоматического мониторинга контейнеров. Health checks настроены для `app`, `postgres` и `temporal`.
 
@@ -200,6 +202,18 @@ RoadRunner экспортирует Prometheus-метрики на порту `2
 ```bash
 curl http://localhost:2112/metrics
 ```
+
+## Buggregator (dev)
+
+В dev-окружении доступен [Buggregator](https://buggregator.dev/) — debug-сервер для PHP. Web UI: http://localhost:8000
+
+Возможности:
+- **Monolog логи** — все логи приложения автоматически отправляются в Buggregator (socket handler на порт 9913)
+- **VarDumper** — вызовы `dump()` отображаются в Buggregator UI (порт 9912)
+- **trap()** — расширенная отладка через пакет `buggregator/trap` (установлен как dev-зависимость)
+- **SMTP** — перехват email на порту 1025
+
+Buggregator запускается только в dev-режиме (`make up`) и не включается в prod (`make up-prod`).
 
 ## Как это работает
 

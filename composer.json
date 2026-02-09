@@ -12,6 +12,7 @@
         "temporal/sdk": "2.16.0"
     },
     "require-dev": {
+        "buggregator/trap": "^1.15",
         "phpstan/phpstan": "^2.0",
         "phpstan/phpstan-symfony": "^2.0",
         "phpunit/phpunit": "^11.0",
