@@ -11,7 +11,8 @@ Docker-based PHP 8.4 application using **Symfony 8** framework with **RoadRunner
 ```bash
 make build              # Build all Docker images
 make composer-install   # Install PHP dependencies (runs in php container)
-make up                 # Start all services (detached)
+make up                 # Start all services (detached, dev mode)
+make up-prod            # Start all services (prod mode, with resource limits)
 make down               # Stop all services
 make restart            # Stop + start
 make logs               # Tail logs from all containers
@@ -21,7 +22,19 @@ make temporal-client    # Run example Temporal workflow (SayHello)
 make temporal-logs      # Tail logs from temporal-worker container
 make sf-console CMD=... # Run Symfony Console command (e.g. CMD=debug:router)
 make cache-clear        # Clear Symfony cache
+make cache-warmup       # Warm up Symfony cache (prod)
+make test               # Run PHPUnit tests
+make phpstan            # Run PHPStan static analysis (level 8)
 ```
+
+## Environments
+
+- **Dev** (`make up`): bind-mount volumes, `APP_DEBUG=1`, all ports exposed, debug logging to stderr
+- **Prod** (`make up-prod`): no volumes, `APP_ENV=prod`, `APP_DEBUG=0`, JSON logging to stderr, resource limits, `restart: unless-stopped`
+
+Prod uses compose override: `docker-compose.yml` + `docker-compose.prod.yml`.
+
+Environment variables are configured via `.env` / `.env.local`. See `.env.example` for the template.
 
 ## Architecture
 
@@ -32,6 +45,8 @@ make cache-clear        # Clear Symfony cache
 - The bundle handles PSR-7 ↔ HttpFoundation conversion, kernel reboot strategy, and resource cleanup between requests
 - Controllers in `src/Controller/` use Symfony attribute routing
 - Symfony DI Container provides autowiring for services
+- Health check endpoint: `GET /healthz` → `{"status":"ok"}`
+- Prometheus metrics: RoadRunner exports on port 2112
 
 **Temporal workflow:** Client (`src/client.php`) → Temporal server (port 7233) → Temporal worker (`src/temporal-worker.php`) → Workflow/Activity classes
 
@@ -41,18 +56,25 @@ make cache-clear        # Clear Symfony cache
 
 **Docker services (docker-compose.yml):**
 - `php` — Base PHP 8.4 CLI image with extensions (sockets, zip, pdo_pgsql, grpc) + Composer. Used for running one-off commands like `composer install`.
-- `app` — RoadRunner image (extends php base + RoadRunner binary). The running Symfony HTTP application on port 80.
+- `app` — RoadRunner image (extends php base + RoadRunner binary). The running Symfony HTTP application on port 80. Has Docker HEALTHCHECK via `/healthz`.
 - `temporal-worker` — RoadRunner image running the Temporal worker (`src/temporal-worker.php`) with `.rr-temporal.yaml` config.
-- `temporal` — Temporal server (auto-setup image) on port 7233, uses PostgreSQL as its backing store.
+- `temporal` — Temporal server (auto-setup image) on port 7233, uses PostgreSQL as its backing store. Has Docker HEALTHCHECK.
 - `temporal-ui` — Temporal Web UI on port 8233.
-- `postgres` — PostgreSQL 16 on port 5432 (user/pass/db: `app`/`app`/`app`)
+- `postgres` — PostgreSQL 16 on port 5432. Has Docker HEALTHCHECK via `pg_isready`. Credentials via env vars (defaults: `app`/`app`/`app`).
 
 **Key config:**
-- `.rr.yaml` — RoadRunner HTTP worker config (server command: `php public/index.php`, APP_RUNTIME env, HTTP address, static file serving, worker pool size, RPC).
+- `.rr.yaml` — RoadRunner HTTP worker config (server command, HTTP address, static files, worker pool with supervisor, JSON logging, Prometheus metrics on 2112, RPC).
 - `.rr-temporal.yaml` — RoadRunner Temporal worker config (Temporal server address, activity worker pool).
 - `config/packages/framework.yaml` — Symfony framework config (secret, router, php_errors).
 - `config/packages/baldinof_road_runner.yaml` — Kernel reboot strategy (on_exception, max_jobs).
+- `config/packages/monolog.yaml` — Logging channels. Dev: debug to stderr. Prod: JSON to stderr.
 - `config/services.yaml` — Autowiring config (excludes Temporal classes and standalone scripts).
+
+## Testing & Quality
+
+- **PHPUnit**: `make test` — runs tests in `tests/` directory. Config in `phpunit.xml.dist`.
+- **PHPStan**: `make phpstan` — static analysis at level 8. Config in `phpstan.neon`.
+- Smoke test: `tests/Controller/HealthControllerTest.php` covers the `/healthz` endpoint.
 
 ## Key Constraint
 

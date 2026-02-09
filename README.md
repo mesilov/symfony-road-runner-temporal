@@ -1,3 +1,4 @@
+
 # PHP 8.4 + Symfony 8 + RoadRunner + Temporal
 
 Демонстрационный проект: PHP 8.4 приложение на базе **Symfony 8** и **RoadRunner** (вместо nginx/php-fpm) с оркестрацией бизнес-процессов через Temporal. Интеграция Symfony с RoadRunner через **baldinof/roadrunner-bundle**. Всё запускается в Docker.
@@ -20,7 +21,7 @@
 Клиент → RoadRunner (порт 80) → Symfony Kernel (public/index.php)
                 ↓
         Статика из public/
-        (.html, .css, .js, .ico, .txt)
+        (.html, .css, .js, .ico, .txt, .svg, .png, .jpg, .gif, .json)
 ```
 
 RoadRunner держит PHP-процессы в памяти — они не пересоздаются на каждый запрос. Через `baldinof/roadrunner-bundle` Runtime бандл автоматически управляет worker loop, ребутом ядра Symfony и очисткой ресурсов между запросами.
@@ -48,7 +49,34 @@ Temporal worker запускается как отдельный экземпл�
 | `temporal-worker` | php + RoadRunner | — | Worker для Temporal workflow и activity |
 | `temporal` | temporalio/auto-setup | 7233 | Temporal Server |
 | `temporal-ui` | temporalio/ui | 8233 | Веб-интерфейс Temporal |
-| `postgres` | PostgreSQL 16 | 5432 | База данных (user/pass/db: `app`/`app`/`app`) |
+| `postgres` | PostgreSQL 16 | 5432 | База данных |
+
+## Окружения (Environments)
+
+### Dev (по умолчанию)
+
+```bash
+make up    # запуск dev-контура
+```
+
+- Bind-mount всех файлов в контейнер
+- `APP_DEBUG=1`, подробное логирование
+- Все порты открыты наружу (PostgreSQL 5432, Temporal 7233)
+
+### Production
+
+```bash
+make up-prod    # запуск prod-контура
+```
+
+- Файлы копируются в образ (без bind-mount)
+- `APP_ENV=prod`, `APP_DEBUG=0`
+- JSON-логирование в stderr
+- Лимиты ресурсов (CPU/memory)
+- PostgreSQL порт закрыт снаружи
+- `restart: unless-stopped` для всех сервисов
+
+Используется override: `docker-compose.yml` + `docker-compose.prod.yml`.
 
 ## Структура проекта
 
@@ -57,10 +85,15 @@ Temporal worker запускается как отдельный экземпл�
 ├── bin/
 │   └── console                   # Symfony Console entry point
 ├── config/
-│   ├── bundles.php               # FrameworkBundle + BaldinofRoadRunnerBundle
+│   ├── bundles.php               # FrameworkBundle + BaldinofRoadRunnerBundle + MonologBundle
 │   ├── packages/
 │   │   ├── framework.yaml        # Symfony Framework config
-│   │   └── baldinof_road_runner.yaml  # RoadRunner bundle config (kernel reboot)
+│   │   ├── baldinof_road_runner.yaml  # RoadRunner bundle config (kernel reboot)
+│   │   ├── monolog.yaml          # Monolog channels
+│   │   ├── dev/monolog.yaml      # Dev: debug logs to stderr
+│   │   └── prod/
+│   │       ├── framework.yaml    # Prod: relaxed router
+│   │       └── monolog.yaml      # Prod: JSON logs to stderr
 │   ├── routes.yaml               # Attribute routing из src/Controller/
 │   └── services.yaml             # Autowiring с исключением Temporal-классов
 ├── docker/
@@ -76,18 +109,26 @@ Temporal worker запускается как отдельный экземпл�
 ├── src/
 │   ├── Kernel.php                # Symfony MicroKernel
 │   ├── Controller/
-│   │   └── HelloController.php   # HTTP-контроллер (маршрут "/")
+│   │   ├── HelloController.php   # HTTP-контроллер (маршрут "/")
+│   │   └── HealthController.php  # Health check endpoint (/healthz)
 │   ├── temporal-worker.php       # Temporal worker — регистрация workflow и activity
 │   ├── client.php                # Клиент для запуска workflow
 │   ├── Workflow/
 │   │   └── SayHelloWorkflow.php
 │   └── Activity/
 │       └── GreetingActivity.php
+├── tests/
+│   └── Controller/
+│       └── HealthControllerTest.php  # Smoke-тест health endpoint
 ├── .env                          # Переменные окружения (APP_ENV, APP_SECRET)
+├── .env.example                  # Шаблон переменных для onboarding
 ├── .rr.yaml                      # Конфиг RoadRunner для HTTP
 ├── .rr-temporal.yaml             # Конфиг RoadRunner для Temporal worker
-├── docker-compose.yml
+├── docker-compose.yml            # Dev compose
+├── docker-compose.prod.yml       # Prod compose override
 ├── composer.json
+├── phpunit.xml.dist              # PHPUnit конфигурация
+├── phpstan.neon                  # PHPStan конфигурация (level 8)
 └── Makefile
 ```
 
@@ -97,24 +138,32 @@ Temporal worker запускается как отдельный экземпл�
 # 1. Клонировать репозиторий
 git clone <url> && cd symfony-road-runner-temporal
 
-# 2. Собрать Docker-образы
+# 2. Настроить переменные окружения
+cp .env.example .env.local
+# Отредактировать .env.local — задать APP_SECRET
+
+# 3. Собрать Docker-образы
 make build
 
-# 3. Установить PHP-зависимости
+# 4. Установить PHP-зависимости
 make composer-install
 
-# 4. Запустить все сервисы
+# 5. Запустить все сервисы
 make up
 
-# 5. Проверить работу HTTP-приложения
+# 6. Проверить работу HTTP-приложения
 curl http://localhost
 # Ожидаемый вывод: Hello from Symfony + RoadRunner! <timestamp>
 
-# 6. Запустить пример Temporal workflow
+# 7. Проверить health endpoint
+curl http://localhost/healthz
+# Ожидаемый вывод: {"status":"ok"}
+
+# 8. Запустить пример Temporal workflow
 make temporal-client
 # Ожидаемый вывод: Result: Hello, Temporal!
 
-# 7. Открыть Temporal UI
+# 9. Открыть Temporal UI
 # http://localhost:8233
 ```
 
@@ -124,7 +173,8 @@ make temporal-client
 |---------|----------|
 | `make build` | Собрать все Docker-образы |
 | `make composer-install` | Установить PHP-зависимости (запускается в контейнере `php`) |
-| `make up` | Запустить все сервисы в фоновом режиме |
+| `make up` | Запустить все сервисы в фоновом режиме (dev) |
+| `make up-prod` | Запустить все сервисы в prod-режиме |
 | `make down` | Остановить все сервисы |
 | `make restart` | Перезапустить все сервисы (down + up) |
 | `make logs` | Показать логи всех контейнеров (follow) |
@@ -134,6 +184,22 @@ make temporal-client
 | `make temporal-logs` | Показать логи Temporal worker (follow) |
 | `make sf-console CMD=...` | Запустить Symfony Console команду (например `CMD=debug:router`) |
 | `make cache-clear` | Очистить кеш Symfony |
+| `make cache-warmup` | Прогреть кеш Symfony (prod) |
+| `make test` | Запустить PHPUnit тесты |
+| `make phpstan` | Запустить статический анализ PHPStan |
+
+## Health Check
+
+Endpoint: `GET /healthz` — возвращает `{"status":"ok"}` с HTTP 200.
+
+Используется Docker HEALTHCHECK для автоматического мониторинга контейнеров. Health checks настроены для `app`, `postgres` и `temporal`.
+
+## Метрики
+
+RoadRunner экспортирует Prometheus-метрики на порту `2112`:
+```bash
+curl http://localhost:2112/metrics
+```
 
 ## Как это работает
 
@@ -148,7 +214,7 @@ make temporal-client
 5. Конвертирует Symfony Response обратно в PSR-7 и отправляет RoadRunner
 6. Управляет ребутом ядра (по исключениям, по лимиту задач)
 
-Пул worker-ов настраивается в `.rr.yaml` (по умолчанию 2 воркера, максимум 64 задачи на воркер).
+Пул worker-ов настраивается в `.rr.yaml` (по умолчанию 4 воркера, supervisor перезапускает при превышении 128 МБ памяти).
 
 ### Temporal workflow
 
@@ -162,7 +228,7 @@ make temporal-client
 
 ### Статические файлы
 
-RoadRunner обслуживает статические файлы из `public/` напрямую, без участия PHP. Разрешённые расширения: `.html`, `.txt`, `.css`, `.js`, `.ico`.
+RoadRunner обслуживает статические файлы из `public/` напрямую, без участия PHP. Разрешённые расширения: `.html`, `.txt`, `.css`, `.js`, `.ico`, `.svg`, `.woff`, `.woff2`, `.png`, `.jpg`, `.gif`, `.json`.
 
 ## Конфигурация
 
@@ -172,7 +238,9 @@ RoadRunner обслуживает статические файлы из `public
 - `server.env.APP_RUNTIME` — класс Runtime для интеграции с RoadRunner (`Baldinof\RoadRunnerBundle\Runtime\Runtime`)
 - `http.address` — адрес прослушивания (`0.0.0.0:80`)
 - `http.static` — настройки раздачи статики из `public/`
-- `http.pool` — размер пула воркеров и лимит задач
+- `http.pool` — размер пула воркеров и supervisor
+- `logs` — JSON-логирование в stderr
+- `metrics` — Prometheus метрики на порту 2112
 - `rpc.listen` — адрес RPC-сервера для управления RoadRunner
 
 ### `.rr-temporal.yaml` — Temporal worker
@@ -185,6 +253,7 @@ RoadRunner обслуживает статические файлы из `public
 
 - `config/packages/framework.yaml` — секрет приложения, роутер, логирование PHP-ошибок
 - `config/packages/baldinof_road_runner.yaml` — стратегия ребута ядра (`on_exception`, `max_jobs: 500`)
+- `config/packages/monolog.yaml` — структурированное логирование (dev: debug в stderr, prod: JSON в stderr)
 - `config/services.yaml` — автоматический autowiring с исключением Temporal-классов
 - `.env` — переменные окружения (`APP_ENV`, `APP_DEBUG`, `APP_SECRET`)
 

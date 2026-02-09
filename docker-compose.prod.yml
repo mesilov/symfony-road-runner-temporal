@@ -1,0 +1,30 @@
+services:
+  app:
+    volumes: []
+    environment:
+      - APP_ENV=prod
+      - APP_DEBUG=0
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    restart: unless-stopped
+
+  temporal-worker:
+    volumes: []
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    restart: unless-stopped
+
+  postgres:
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    restart: unless-stopped

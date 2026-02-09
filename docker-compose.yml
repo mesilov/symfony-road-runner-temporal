@@ -7,7 +7,8 @@ services:
     volumes:
       - .:/app
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
   app:
     build:
@@ -19,11 +20,18 @@ services:
       - .:/app
       - ./var/logs:/app/var/logs
     environment:
-      - APP_ENV=dev
-      - APP_DEBUG=1
-      - APP_SECRET=change-me-to-a-random-secret-string
+      - APP_ENV=${APP_ENV:-dev}
+      - APP_DEBUG=${APP_DEBUG:-1}
+      - APP_SECRET=${APP_SECRET:-change-me-to-a-random-secret-string}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   temporal-worker:
     build:
@@ -33,7 +41,8 @@ services:
     volumes:
       - .:/app
     depends_on:
-      - temporal
+      temporal:
+        condition: service_healthy
 
   temporal:
     image: temporalio/auto-setup:1.29.3
@@ -42,11 +51,18 @@ services:
     environment:
       - DB=postgres12
       - DB_PORT=5432
-      - POSTGRES_USER=app
-      - POSTGRES_PWD=app
+      - POSTGRES_USER=${POSTGRES_USER:-app}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-app}
       - POSTGRES_SEEDS=postgres
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:7233/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   temporal-ui:
     image: temporalio/ui:2.45.1
@@ -55,7 +71,8 @@ services:
     environment:
       - TEMPORAL_ADDRESS=temporal:7233
     depends_on:
-      - temporal
+      temporal:
+        condition: service_healthy
 
   postgres:
     build:
@@ -64,11 +81,16 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
-      POSTGRES_DB: app
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

@@ -20,6 +20,24 @@ http:
       - ".css"
       - ".js"
       - ".ico"
+      - ".svg"
+      - ".woff"
+      - ".woff2"
+      - ".png"
+      - ".jpg"
+      - ".gif"
+      - ".json"
   pool:
-    num_workers: 2
+    num_workers: 4
     max_jobs: 64
+    supervisor:
+      max_worker_memory: 128
+
+logs:
+  mode: production
+  level: info
+  encoding: json
+  output: stderr
+
+metrics:
+  address: "0.0.0.0:2112"

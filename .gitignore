@@ -6,3 +6,5 @@
 .env.*.local
 docker-compose.override.yml
 var/logs/*.log
+.phpunit.cache/
+phpstan-cache/

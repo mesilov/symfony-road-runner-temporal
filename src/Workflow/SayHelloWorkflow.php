@@ -13,7 +13,7 @@ use Temporal\Workflow\WorkflowMethod;
 class SayHelloWorkflow
 {
     #[WorkflowMethod]
-    public function sayHello(string $name)
+    public function sayHello(string $name): \Generator
     {
         $activity = Workflow::newActivityStub(
             GreetingActivity::class,

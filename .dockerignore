@@ -1,0 +1,11 @@
+.git
+.idea
+.claude
+vendor
+var
+node_modules
+*.md
+docker-compose*.yml
+Makefile
+.env*
+!.env
